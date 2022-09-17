@@ -1,4 +1,4 @@
-module at.weiss.socks5
+module github.com/Tbswss/go-socks5
 
 go 1.19
 
