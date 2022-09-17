@@ -3,6 +3,7 @@ package socks5
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -48,6 +49,15 @@ type Config struct {
 
 	// Optional function for dialing out
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
+
+	// Request hook, which is called before any data is sent to the target
+	PreSendHookClient func(ctx context.Context, target net.Conn, src io.Reader) (*io.Reader, error)
+	// Request hook, which is called after any data is sent to the target
+	PostSendHookClient func(ctx context.Context, target net.Conn, src io.Reader, err error) error
+	// Request hook, which is called before any data is sent to the client
+	PreSendHookTarget func(ctx context.Context, request *Request, src io.Reader) (*io.Reader, error)
+	// Request hook, which is called after any data is sent to the client
+	PostSendHookTarget func(ctx context.Context, request *Request, src io.Reader, err error) error
 }
 
 // Server is reponsible for accepting connections and handling

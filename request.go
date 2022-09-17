@@ -197,14 +197,59 @@ func (s *Server) handleConnect(ctx context.Context, conn conn, req *Request) err
 		return fmt.Errorf("Failed to send reply: %v", err)
 	}
 
+	clientSrc := req.bufConn
+	targetSrc := target
+	dropClient := false
+	dropTarget := false
+
+	if s.config.PreSendHookClient != nil {
+		clientSrc, err := s.config.PreSendHookClient(
+			ctx,
+			target,
+			clientSrc,
+		)
+		if err != nil {
+			return fmt.Errorf("Pre send hook for client failed.")
+		}
+		dropClient = clientSrc == nil
+	}
+	if s.config.PreSendHookTarget != nil {
+		targetSrc, err := s.config.PreSendHookTarget(
+			ctx,
+			req,
+			targetSrc,
+		)
+		if err != nil {
+			return fmt.Errorf("Pre send hook for target failed.")
+		}
+		dropTarget = targetSrc == nil
+	}
+
 	// Start proxying
 	errCh := make(chan error, 2)
-	go proxy(target, req.bufConn, errCh)
-	go proxy(conn, target, errCh)
+	if !dropClient {
+		go proxy(target, clientSrc, errCh)
+	}
+	if !dropTarget {
+		go proxy(conn, targetSrc, errCh)
+	}
 
 	// Wait
 	for i := 0; i < 2; i++ {
 		e := <-errCh
+		if s.config.PostSendHookClient != nil {
+			e = s.config.PostSendHookClient(ctx, target, targetSrc, e)
+			if e != nil {
+				return e
+			}
+		}
+		if s.config.PostSendHookTarget != nil {
+			e = s.config.PostSendHookTarget(ctx, req, clientSrc, e)
+			if e != nil {
+				return e
+			}
+		}
+
 		if e != nil {
 			// return from this function closes target (and conn).
 			return e
